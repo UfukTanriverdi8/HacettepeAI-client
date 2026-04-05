@@ -34,8 +34,9 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
   sender: 'Human' | 'AI',
   message: string,
   isPlaceholder?: boolean,   // true while API is loading
-  skipTypewriter?: boolean,  // skip animation for messages loaded from localStorage
-  id?: number                // used to replace placeholder with real response
+  skipTypewriter?: boolean,  // skip animation for history messages and real API responses
+  id?: number,               // used to replace placeholder with real response
+  timestamp?: string         // v2 only — used to send feedback for a specific message
 }
 ```
 
@@ -44,8 +45,9 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
 ### V2 API (default, stateful)
 - Env var: `VITE_V2_API_URL`, `VITE_V2_API_KEY`
 - Backend: AWS Lambda
-- Request: `{ prompt, session_id? }`
-- Response: `{ response, session_id }`
+- Chat request: `{ prompt, session_id? }`
+- Chat response: `{ response, session_id, timestamp }`
+- Feedback request: `{ action: 'feedback', session_id, timestamp, feedback_value: 'Positive' | 'Negative' }`
 - Session stored in `localStorage` as `v2_session_id`
 
 ### V1 API (legacy, stateless)
@@ -55,10 +57,10 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
 
 **API call flow:**
 1. Add human message to history
-2. Add placeholder "Thinking..." message with unique ID
+2. Add placeholder message with unique ID (cycling animated loading messages)
 3. Fetch from selected API
-4. Replace placeholder with real response using ID
-5. Store `session_id` (v2 only)
+4. Replace placeholder with real response using ID (`skipTypewriter: true` — instant display)
+5. Store `session_id` and `timestamp` (v2 only)
 
 **Constraints:** Max 30 messages. Session cleared on language or version switch.
 
@@ -98,7 +100,13 @@ npm run lint     # ESLint
 
 ## Notable Conventions
 - All components are functional with hooks
-- Typewriter animation: 3ms/char for AI responses, 20ms for placeholders, skip for loaded history
+- Typewriter animation:
+  - **Placeholder**: cycles through `LOADING_MESSAGES` (Turkish strings) at 45ms/char, 220ms for dots, 700ms pause between messages
+  - **Real AI responses**: instant display (`skipTypewriter: true` set by `ChatInput`)
+  - **Greeting / initial messages** (no `skipTypewriter`): 25ms/char one-shot typewriter
+  - **History on load**: instant display (`skipTypewriter: true` set by `App.jsx`)
+- Feedback buttons (thumbs up/down) shown on v2 AI messages after typing completes, only when `timestamp` is present
+- `GiDeerHead` icon (react-icons/gi) used as AI avatar; `FaThumbsUp`/`FaThumbsDown` for feedback
 - `dangerouslySetInnerHTML` used only in `InfoModal.jsx` for controlled bilingual HTML content
 - No routing — single view SPA
 - Language switch clears chat history (with confirmation dialog)
