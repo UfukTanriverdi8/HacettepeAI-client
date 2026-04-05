@@ -2,7 +2,7 @@ import {useRef, useEffect} from 'react';
 import ChatMessage from './ChatMessage';
 
 
-const ChatConversations = ({ chatHistory, language, apiVersion }) => {
+const ChatConversations = ({ chatHistory, language }) => {
 
     const chatContainerRef = useRef(null);
 
@@ -14,11 +14,11 @@ const ChatConversations = ({ chatHistory, language, apiVersion }) => {
 
     const greetingMsg = language === 'EN' ? 'Hello! How can I help you today?' : 'Merhaba! Bugün size nasıl yardımcı olabilirim?';
   return (
-    
+
     <div ref={chatContainerRef} className='flex flex-col items-center p-4 overflow-y-auto h-full scroll-container'>
-        <ChatMessage sender='AI' message={greetingMsg} isPlaceholder={false} />
+        <ChatMessage sender='AI' message={greetingMsg} isPlaceholder={false} language={language} />
       {chatHistory.map((chat, index) => (
-        <ChatMessage key={index} sender={chat.sender} message={chat.message} isPlaceholder={chat.isPlaceholder} skipTypewriter={chat.skipTypewriter} timestamp={chat.timestamp} apiVersion={apiVersion}/>
+        <ChatMessage key={index} sender={chat.sender} message={chat.message} isPlaceholder={chat.isPlaceholder} skipTypewriter={chat.skipTypewriter} timestamp={chat.timestamp} question={chat.question} language={language} />
       ))}
     </div>
   );

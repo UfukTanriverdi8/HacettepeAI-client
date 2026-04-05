@@ -29,8 +29,11 @@ For any questions or feedback, feel free to reach out:
 
 
 ## TO DO (I hope I'll be back :/)
-- [ ] markdown and newlines need to be rendered when displaying the response
-- [ ] auto scroll to bottom not working after the typewriter effect
-- [ ] cors allowed origin
+- [X] markdown and newlines need to be rendered when displaying the response
+- [X] auto scroll to bottom not working after the typewriter effect
+- [X] cors allowed origin
 - [X] title typewriter effect
-- [ ] feedback button
+- [X] feedback button
+- [ ] more mobile friendly design
+- [ ] colors can be adjusted
+- [ ] light/dark mode switch

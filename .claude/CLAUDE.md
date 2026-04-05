@@ -9,9 +9,10 @@ Built with Vite + React 18 + Tailwind CSS. Deployed on Digital Ocean.
 ### Component Tree
 ```
 App.jsx                         # Root: global state, layout
-├── Header.jsx                  # Branding, language toggle, API version toggle
+├── Header.jsx                  # Branding, language toggle
 ├── ChatConversations.jsx       # Scrollable message list container
 │   └── ChatMessage.jsx         # Individual message bubble + typewriter effect
+│       └── FeedbackModal.jsx   # 5-star feedback modal (shown per AI message)
 ├── ChatInput.jsx               # Input field, send/clear, API calls
 ├── Footer.jsx                  # Social links, info button
 └── InfoModal.jsx               # Project info popup
@@ -25,7 +26,6 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
 **App.jsx global state:**
 - `chatHistory` — array of message objects (persisted to localStorage)
 - `language` — `'EN' | 'TR'` (persisted)
-- `apiVersion` — `'v1' | 'v2'` (persisted)
 - `openModal` — boolean
 
 **Message object shape:**
@@ -36,33 +36,50 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
   isPlaceholder?: boolean,   // true while API is loading
   skipTypewriter?: boolean,  // skip animation for history messages and real API responses
   id?: number,               // used to replace placeholder with real response
-  timestamp?: string         // v2 only — used to send feedback for a specific message
+  timestamp?: string,        // ISO string — present on all AI responses, used to gate feedback button
+  question?: string          // the user's original question — stored for feedback POST body
 }
 ```
 
 ## API Integration (ChatInput.jsx)
 
-### V2 API (default, stateful)
-- Env var: `VITE_V2_API_URL`, `VITE_V2_API_KEY`
+Backend is selected at build time via `VITE_ACTIVE_BACKEND` env var. No UI toggle exists.
+
+### Institutional backend (default, `VITE_ACTIVE_BACKEND=institutional`)
+- Env var: `VITE_INSTITUTIONAL_API_URL`, `VITE_INSTITUTIONAL_API_KEY`
+- Backend: AWS API Gateway → AWS Bedrock Flow (multi-agent)
+- Chat request: `POST /student` `{ question }`
+- Chat response: triple-nested JSON — unwrap: `data.result.body` → `result.body` → `responses[agentKey]`
+- Feedback request: `POST /student/feedback` `{ question, answer, rating, comment }` (backend TBD)
+- Timestamp: client-generated ISO string (no session management)
+
+### Tunca-hoca backend (fallback, `VITE_ACTIVE_BACKEND=tunca-hoca`)
+- Env var: `VITE_TUNCA_API_URL`, `VITE_TUNCA_API_KEY`
 - Backend: AWS Lambda
 - Chat request: `{ prompt, session_id? }`
 - Chat response: `{ response, session_id, timestamp }`
-- Feedback request: `{ action: 'feedback', session_id, timestamp, feedback_value: 'Positive' | 'Negative' }`
+- Feedback request: `{ action: 'feedback', session_id, timestamp, feedback_value: 'Positive' | 'Negative' }` (stars ≥3 → Positive)
 - Session stored in `localStorage` as `v2_session_id`
-
-### V1 API (legacy, stateless)
-- Env var: `VITE_API_URL`, `VITE_API_KEY`
-- Request: `{ query, college_name: "hacettepe", lang, context }`
-- Response: `{ response: { output: { text } } }`
 
 **API call flow:**
 1. Add human message to history
 2. Add placeholder message with unique ID (cycling animated loading messages)
-3. Fetch from selected API
-4. Replace placeholder with real response using ID (`skipTypewriter: true` — instant display)
-5. Store `session_id` and `timestamp` (v2 only)
+3. Fetch from active backend
+4. Replace placeholder with real response (`skipTypewriter: true` — instant display)
+5. Store `timestamp` and `question` on the AI message for feedback
 
-**Constraints:** Max 30 messages. Session cleared on language or version switch.
+**Constraints:** Max 30 messages. Session cleared on language switch.
+
+## Feedback System (FeedbackModal.jsx)
+
+- Triggered by "💬 Geri bildirimde bulun" button shown on AI messages after typing completes
+- Requires `timestamp` to be present on the message
+- Hidden after submission (`feedbackSubmitted` state in ChatMessage)
+- Modal contains:
+  - 5-star rating with half-star support (0.5 increments via left/right half-hover)
+  - Optional comment textarea
+  - Bilingual TR/EN labels
+- Posts to institutional or tunca-hoca feedback endpoint based on `VITE_ACTIVE_BACKEND`
 
 ## Styling
 - Tailwind CSS v3 with custom colors in `tailwind.config.js`:
@@ -77,16 +94,17 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
 |---|---|
 | `react-markdown` + `remark-gfm` | Render AI responses as Markdown |
 | `typewriter-effect` | Animated title in Header |
-| `react-icons` | UI icons (FaUser, FaTrash, FaArrow, etc.) |
+| `react-icons` | UI icons (FaUser, FaStar, FaStarHalfStroke, GiDeerHead, etc.) |
 | `react-toastify` | Toast notifications |
 | Vite | Build tool + dev server |
 
 ## Environment Variables
 ```
-VITE_API_KEY
-VITE_API_URL
-VITE_V2_API_URL
-VITE_V2_API_KEY
+VITE_INSTITUTIONAL_API_URL    # active backend (default)
+VITE_INSTITUTIONAL_API_KEY
+VITE_TUNCA_API_URL            # fallback backend
+VITE_TUNCA_API_KEY
+VITE_ACTIVE_BACKEND           # 'institutional' | 'tunca-hoca'
 ```
 All API keys/URLs are env-var only — never hardcoded.
 
@@ -105,8 +123,8 @@ npm run lint     # ESLint
   - **Real AI responses**: instant display (`skipTypewriter: true` set by `ChatInput`)
   - **Greeting / initial messages** (no `skipTypewriter`): 25ms/char one-shot typewriter
   - **History on load**: instant display (`skipTypewriter: true` set by `App.jsx`)
-- Feedback buttons (thumbs up/down) shown on v2 AI messages after typing completes, only when `timestamp` is present
-- `GiDeerHead` icon (react-icons/gi) used as AI avatar; `FaThumbsUp`/`FaThumbsDown` for feedback
+- Feedback button shown on AI messages after typing completes, only when `timestamp` is present
+- `GiDeerHead` icon (react-icons/gi) used as AI avatar; `FaStar`/`FaStarHalfStroke` for feedback rating
 - `dangerouslySetInnerHTML` used only in `InfoModal.jsx` for controlled bilingual HTML content
 - No routing — single view SPA
 - Language switch clears chat history (with confirmation dialog)
