@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { FaUser, FaThumbsUp, FaThumbsDown } from "react-icons/fa6"
+import { FaUser } from "react-icons/fa6"
 import { GiDeerHead } from "react-icons/gi"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import FeedbackModal from './FeedbackModal'
 
 const LOADING_MESSAGES = ['🤔 Düşünüyor...','🦌 Hacettepe kaynakları taranıyor...' ,'🧑‍🍳 Cevap üretiliyor...']
 
-const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp, apiVersion }) => {
+const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp, question, language }) => {
     const [displayedMsg, setDisplayedMsg] = useState("")
     const [isTypingComplete, setIsTypingComplete] = useState(false)
-    const [feedbackGiven, setFeedbackGiven] = useState(null) // null | 'Positive' | 'Negative'
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+    const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
     const timeoutRef = useRef(null)
-
-    const V2_API_URL = import.meta.env.VITE_V2_API_URL
-    const V2_API_KEY = import.meta.env.VITE_V2_API_KEY
 
     useEffect(() => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -68,31 +67,7 @@ const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp
         }
     }, [message])
 
-    const sendFeedback = async (feedbackValue) => {
-        if (feedbackGiven) return
-        setFeedbackGiven(feedbackValue)
-        const sessionId = localStorage.getItem('v2_session_id')
-        try {
-            await fetch(V2_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': V2_API_KEY,
-                },
-                body: JSON.stringify({
-                    action: 'feedback',
-                    session_id: sessionId,
-                    timestamp: timestamp,
-                    feedback_value: feedbackValue,
-                })
-            })
-        } catch (error) {
-            console.error('Feedback error:', error)
-            setFeedbackGiven(null)
-        }
-    }
-
-    const showFeedback = sender === 'AI' && !isPlaceholder && isTypingComplete && apiVersion === 'v2' && timestamp
+    const showFeedbackButton = sender === 'AI' && !isPlaceholder && isTypingComplete && timestamp && !feedbackSubmitted
 
     return (
         <div className="w-full max-w-5xl p-2 mb-2 flex items-start text-tertiary bg-black rounded-lg">
@@ -112,35 +87,25 @@ const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp
                 ) : (
                     <p>{displayedMsg}</p>
                 )}
-                {showFeedback && (
-                    <div className="flex gap-2 mt-2">
-                        <button
-                            onClick={() => sendFeedback('Positive')}
-                            disabled={feedbackGiven !== null}
-                            className={`p-1.5 rounded transition-colors duration-200 focus:outline-none ${
-                                feedbackGiven === 'Positive'
-                                    ? 'text-secondary'
-                                    : feedbackGiven !== null
-                                    ? 'text-[#4b5563] cursor-not-allowed'
-                                    : 'text-[#9ca3af] hover:text-secondary'
-                            }`}
-                        >
-                            <FaThumbsUp />
-                        </button>
-                        <button
-                            onClick={() => sendFeedback('Negative')}
-                            disabled={feedbackGiven !== null}
-                            className={`p-1.5 rounded transition-colors duration-200 focus:outline-none ${
-                                feedbackGiven === 'Negative'
-                                    ? 'text-secondary'
-                                    : feedbackGiven !== null
-                                    ? 'text-[#4b5563] cursor-not-allowed'
-                                    : 'text-[#9ca3af] hover:text-secondary'
-                            }`}
-                        >
-                            <FaThumbsDown />
-                        </button>
-                    </div>
+                {showFeedbackButton && (
+                    <button
+                        onClick={() => setShowFeedbackModal(true)}
+                        className="mt-2 text-xs text-[#9ca3af] hover:text-secondary transition-colors duration-200 self-start"
+                    >
+                        💬 {language === 'TR' ? 'Geri bildirimde bulun' : 'Give feedback'}
+                    </button>
+                )}
+                {showFeedbackModal && (
+                    <FeedbackModal
+                        onClose={(submitted) => {
+                            setShowFeedbackModal(false)
+                            if (submitted) setFeedbackSubmitted(true)
+                        }}
+                        question={question}
+                        answer={message}
+                        timestamp={timestamp}
+                        language={language}
+                    />
                 )}
             </div>
         </div>

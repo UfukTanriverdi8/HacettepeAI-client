@@ -1,7 +1,6 @@
 import Typewriter from "typewriter-effect"
-import { useState } from "react"
 
-const Header = ({language, handleLanguageChange, apiVersion, handleApiVersionChange}) => {
+const Header = ({language, handleLanguageChange}) => {
     //const [showCursor, setShowCursor] = useState(true)
 
     return (
@@ -29,16 +28,6 @@ const Header = ({language, handleLanguageChange, apiVersion, handleApiVersionCha
         </h1>
         
         <div className="w-1/3 flex justify-end items-center mr-3 text-base gap-2">
-            {/* API Version Button */}
-            <button 
-            onClick={handleApiVersionChange}
-            className={`px-3 py-1 rounded-md text-sm font-bold transition-all duration-300 ${
-                apiVersion === 'v2' ? 'bg-secondary text-tertiary' : 'bg-black text-tertiary border border-tertiary border-opacity-30'
-            }`}
-            >
-                {apiVersion.toUpperCase()}
-            </button>
-
             {/* Language Switch */}
             <div 
             className="relative flex items-center cursor-pointer w-14 sm:w-16 h-7 sm:h-8 bg-black rounded-full" 
