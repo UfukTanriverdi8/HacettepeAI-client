@@ -7,7 +7,7 @@ import FeedbackModal from './FeedbackModal'
 
 const LOADING_MESSAGES = ['🤔 Düşünüyor...','🦌 Hacettepe kaynakları taranıyor...' ,'🧑‍🍳 Cevap üretiliyor...']
 
-const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp, question, language }) => {
+const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp, question, session_id, apiUrl, language }) => {
     const [displayedMsg, setDisplayedMsg] = useState("")
     const [isTypingComplete, setIsTypingComplete] = useState(false)
     const [showFeedbackModal, setShowFeedbackModal] = useState(false)
@@ -70,7 +70,7 @@ const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp
     const showFeedbackButton = sender === 'AI' && !isPlaceholder && isTypingComplete && timestamp && !feedbackSubmitted
 
     return (
-        <div className="w-full max-w-5xl p-2 mb-2 flex items-start text-tertiary bg-black rounded-lg">
+        <div className="w-full max-w-3xl p-2 mb-2 flex items-start text-tertiary bg-black bg-opacity-50 rounded-lg">
             {sender === 'AI' && <GiDeerHead className={`flex-shrink-0 w-8 mr-2 mt-1 text-2xl ${isPlaceholder ? 'text-[#9ca3af]' : 'text-secondary'}`} />}
             {sender === 'Human' && <FaUser className="flex-shrink-0 w-8 mr-2 mt-1 text-2xl" />}
             <div className="flex flex-col flex-1">
@@ -90,9 +90,10 @@ const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp
                 {showFeedbackButton && (
                     <button
                         onClick={() => setShowFeedbackModal(true)}
-                        className="mt-2 text-xs text-[#9ca3af] hover:text-secondary transition-colors duration-200 self-start"
+                        className="mt-2 text-base text-white-text hover:text-secondary transition-colors duration-200 self-end"
                     >
-                        💬 {language === 'TR' ? 'Geri bildirimde bulun' : 'Give feedback'}
+                        <span className="feedback-emoji-wiggle">💬</span>{' '}
+                        {language === 'TR' ? 'Geri bildirimde bulun' : 'Give feedback'}
                     </button>
                 )}
                 {showFeedbackModal && (
@@ -104,6 +105,8 @@ const ChatMessage = ({ sender, message, isPlaceholder, skipTypewriter, timestamp
                         question={question}
                         answer={message}
                         timestamp={timestamp}
+                        session_id={session_id}
+                        apiUrl={apiUrl}
                         language={language}
                     />
                 )}

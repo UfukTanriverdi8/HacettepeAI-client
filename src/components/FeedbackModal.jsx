@@ -2,13 +2,7 @@ import { useState } from 'react'
 import { FaStar, FaStarHalfStroke } from 'react-icons/fa6'
 import { toast } from 'react-toastify'
 
-const ACTIVE_BACKEND = import.meta.env.VITE_ACTIVE_BACKEND || 'institutional'
-const INSTITUTIONAL_API_URL = import.meta.env.VITE_INSTITUTIONAL_API_URL
-const INSTITUTIONAL_API_KEY = import.meta.env.VITE_INSTITUTIONAL_API_KEY
-const TUNCA_API_URL = import.meta.env.VITE_TUNCA_API_URL
-const TUNCA_API_KEY = import.meta.env.VITE_TUNCA_API_KEY
-
-const FeedbackModal = ({ onClose, question, answer, timestamp, language }) => {
+const FeedbackModal = ({ onClose, question, answer, timestamp, session_id, apiUrl, language }) => {
     const [rating, setRating] = useState(0)
     const [hoverRating, setHoverRating] = useState(0)
     const [comment, setComment] = useState('')
@@ -20,33 +14,18 @@ const FeedbackModal = ({ onClose, question, answer, timestamp, language }) => {
         if (rating === 0) return
         setSubmitting(true)
         try {
-            if (ACTIVE_BACKEND === 'institutional') {
-                await fetch(`${INSTITUTIONAL_API_URL}/feedback`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': INSTITUTIONAL_API_KEY,
-                    },
-                    body: JSON.stringify({ question, answer, rating, comment })
+            await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'feedback',
+                    session_id,
+                    timestamp,
+                    feedback_value: rating >= 3 ? 'Positive' : 'Negative',
+                    rating: Math.round(rating * 2),
+                    ...(comment && { feedback_reason: comment })
                 })
-            } else {
-                // tunca-hoca: map star rating to Positive/Negative
-                const feedbackValue = rating >= 3 ? 'Positive' : 'Negative'
-                const sessionId = localStorage.getItem('v2_session_id')
-                await fetch(TUNCA_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': TUNCA_API_KEY,
-                    },
-                    body: JSON.stringify({
-                        action: 'feedback',
-                        session_id: sessionId,
-                        timestamp,
-                        feedback_value: feedbackValue,
-                    })
-                })
-            }
+            })
             toast.success(
                 language === 'TR' ? 'Geri bildiriminiz için teşekkürler!' : 'Thank you for your feedback!',
                 { position: 'top-left', autoClose: 3000, className: 'custom-toast' }

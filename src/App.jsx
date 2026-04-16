@@ -58,9 +58,12 @@ const App =  () => {
 
       }
 
+    const [activeBackend, setActiveBackend] = useState(import.meta.env.VITE_ACTIVE_BACKEND || 'single_agent')
+    const handleBackendToggle = () => setActiveBackend(prev => prev === 'single_agent' ? 'multi_agent' : 'single_agent')
+
       const changeLanguage = () => {
         setChatHistory([]) // Clear the chat history
-        localStorage.removeItem('v2_session_id') // Clear session_id
+        localStorage.removeItem('session_id') // Clear session_id
         const newLang = language === 'EN' ? 'TR' : 'EN'
             setLanguage(newLang)
     
@@ -79,12 +82,12 @@ const App =  () => {
         }
       
     return (
-    <div className="flex flex-col h-screen bg-primary text-tertiary">
-        <Header className="fixed top-0 left-0 right-0" language={language} handleLanguageChange={handleLanguageChange}/>
+    <div className="flex flex-col h-screen bg-primary bg-opacity-85 text-tertiary">
+        <Header className="fixed top-0 left-0 right-0" language={language} handleLanguageChange={handleLanguageChange} activeBackend={activeBackend} handleBackendToggle={handleBackendToggle}/>
         <div className="flex-grow overflow-auto scrollable max-h-full">
         <ChatConversations chatHistory={chatHistory} language={language} />
         </div>
-        <ChatInput className="fixed" language={language} chatHistory={chatHistory} setChatHistory={setChatHistory} />
+        <ChatInput className="fixed" language={language} chatHistory={chatHistory} setChatHistory={setChatHistory} activeBackend={activeBackend} />
         {openModal && <InfoModal language={language} onClose={toggleModal} />}
         <Footer className="fixed bottom-0 left-0 right-0" onInfoClick={toggleModal} />
         <ToastContainer />

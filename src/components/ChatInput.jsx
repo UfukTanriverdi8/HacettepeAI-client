@@ -1,18 +1,14 @@
 import { FaArrowUp, FaTrashCan } from "react-icons/fa6";
 import { useState} from 'react';
 
-const ACTIVE_BACKEND = import.meta.env.VITE_ACTIVE_BACKEND || 'institutional'
-const TUNCAHOCA_API_URL = import.meta.env.VITE_TUNCAHOCA_API_URL
-const TUNCAHOCA_API_KEY = import.meta.env.VITE_TUNCAHOCA_API_KEY
-const INSTITUTIONAL_API_URL = import.meta.env.VITE_INSTITUTIONAL_API_URL
-const INSTITUTIONAL_API_KEY = import.meta.env.VITE_INSTITUTIONAL_API_KEY
+const SINGLE_AGENT_API_URL = import.meta.env.VITE_SINGLE_AGENT_API_URL
+const MULTI_AGENT_API_URL = import.meta.env.VITE_MULTI_AGENT_API_URL
 
-const ChatInput = ({chatHistory, setChatHistory, language}) => {
+const ChatInput = ({chatHistory, setChatHistory, language, activeBackend}) => {
     const [inputValue, setInputValue] = useState('');
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(() => {
-        // Retrieve session_id from localStorage or default to null (tunca-hoca only)
-        const savedSessionId = localStorage.getItem('v2_session_id');
+        const savedSessionId = localStorage.getItem('session_id');
         return savedSessionId ? savedSessionId : null;
     });
 
@@ -57,69 +53,44 @@ const ChatInput = ({chatHistory, setChatHistory, language}) => {
         try {
             let responseText
             let timestamp
-            let response
+            let newSessionId
 
-            if (ACTIVE_BACKEND === 'institutional') {
-                response = await fetch(INSTITUTIONAL_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': INSTITUTIONAL_API_KEY,
-                    },
-                    body: JSON.stringify({ question: currentQuestion })
-                })
+            const requestBody = { action: 'chat', prompt: currentQuestion }
+            if (sessionId) requestBody.session_id = sessionId
 
-                if (!response.ok) {
-                    alert("We're sorry, but something went wrong. Please try again later.")
-                    throw new Error('Network response was not ok')
-                }
+            const apiUrl = activeBackend === 'multi_agent' ? MULTI_AGENT_API_URL : SINGLE_AGENT_API_URL
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
 
-                const data = await response.json()
-                // Triple-unwrap nested response from Bedrock Flow
-                const outer = JSON.parse(data.result.body)
-                const inner = JSON.parse(outer.result.body)
-                const agentKey = Object.keys(inner.responses)[0]
-                responseText = inner.responses[agentKey]
-                timestamp = new Date().toISOString()
+            if (!response.ok) {
+                alert("We're sorry, but something went wrong. Please try again later.")
+                throw new Error('Network response was not ok')
+            }
 
+            const data = await response.json()
+
+            if (activeBackend === 'multi_agent') {
+                const parsed = JSON.parse(data.body)
+                responseText = parsed.response
+                timestamp = parsed.timestamp
+                newSessionId = parsed.session_id
             } else {
-                // tunca-hoca backend
-                if (sessionId) {
-                    console.log('Using existing session_id:', sessionId)
-                } else {
-                    console.log('No session_id found. A new session will be created.')
-                }
-
-                const requestBody = { prompt: currentQuestion }
-                if (sessionId) requestBody.session_id = sessionId
-
-                response = await fetch(TUNCAHOCA_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': TUNCAHOCA_API_KEY,
-                    },
-                    body: JSON.stringify(requestBody)
-                })
-
-                if (!response.ok) {
-                    alert("We're sorry, but something went wrong. Please try again later.")
-                    throw new Error('Network response was not ok')
-                }
-
-                const data = await response.json()
                 responseText = data.response
                 timestamp = data.timestamp
+                newSessionId = data.session_id
+            }
 
-                if (data.session_id) {
-                    setSessionId(data.session_id)
-                    localStorage.setItem('v2_session_id', data.session_id)
-                }
+            if (newSessionId) {
+                setSessionId(newSessionId)
+                localStorage.setItem('session_id', newSessionId)
             }
 
             setChatHistory(prevHistory => prevHistory.map(message =>
                 message.id === aiMessageId
-                    ? { ...message, message: responseText, isPlaceholder: false, skipTypewriter: true, timestamp, question: currentQuestion }
+                    ? { ...message, message: responseText, isPlaceholder: false, skipTypewriter: true, timestamp, question: currentQuestion, session_id: newSessionId, apiUrl }
                     : message
             ))
 
@@ -134,7 +105,7 @@ const ChatInput = ({chatHistory, setChatHistory, language}) => {
         if (confirm("Sohbet geçmişini temizlemek istediğine emin misiniz?") == true) {
             setChatHistory([])
             setSessionId(null)
-            localStorage.removeItem('v2_session_id')
+            localStorage.removeItem('session_id')
         }
       }
 
@@ -149,7 +120,7 @@ const ChatInput = ({chatHistory, setChatHistory, language}) => {
                 value={inputValue}
                 onKeyDown={handleKeyDown}
                 onChange={(e) => setInputValue(e.target.value)}
-                className="w-full h-14 px-4 text-tertiary bg-black rounded-lg border-2 border-primary transition-colors duration-300 focus:border-secondary focus:outline-none"
+                className="w-full h-14 px-4 text-white bg-black bg-opacity-50 rounded-xl border-2 border-primary transition-colors duration-300 focus:border-secondary focus:outline-none"
               />
             </div>
             <div className="flex-shrink-0 ml-2 text-2xl">
@@ -162,7 +133,7 @@ const ChatInput = ({chatHistory, setChatHistory, language}) => {
             <div className="flex-shrink-0 ml-2 text-2xl">
               <button
               onClick={clearChat}
-              className="bg-black text-tertiary p-2 rounded-md transition-all hover:bg-opacity-20 duration-300 focus:outline-none focus:ring-2">
+              className="bg-black text-tertiary p-2 rounded-md transition-all hover:bg-secondary duration-300 focus:outline-none focus:ring-2">
                 <FaTrashCan />
               </button>
             </div>

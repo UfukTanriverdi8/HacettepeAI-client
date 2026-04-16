@@ -1,4 +1,4 @@
-# Hacettepe AI Chatbot - Project Context
+# Hacettepe AI Client - Project Context
 
 ## Project Overview
 Single-page React chatbot application for Hacettepe University AI assistant.
@@ -9,7 +9,7 @@ Built with Vite + React 18 + Tailwind CSS. Deployed on Digital Ocean.
 ### Component Tree
 ```
 App.jsx                         # Root: global state, layout
-├── Header.jsx                  # Branding, language toggle
+├── Header.jsx                  # Branding, backend toggle, language toggle
 ├── ChatConversations.jsx       # Scrollable message list container
 │   └── ChatMessage.jsx         # Individual message bubble + typewriter effect
 │       └── FeedbackModal.jsx   # 5-star feedback modal (shown per AI message)
@@ -26,6 +26,7 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
 **App.jsx global state:**
 - `chatHistory` — array of message objects (persisted to localStorage)
 - `language` — `'EN' | 'TR'` (persisted)
+- `activeBackend` — `'single_agent' | 'multi_agent'` (runtime toggle, NOT persisted — resets to env var default on reload)
 - `openModal` — boolean
 
 **Message object shape:**
@@ -37,56 +38,75 @@ No external state library — all prop-drilled from `App.jsx` with `localStorage
   skipTypewriter?: boolean,  // skip animation for history messages and real API responses
   id?: number,               // used to replace placeholder with real response
   timestamp?: string,        // ISO string — present on all AI responses, used to gate feedback button
-  question?: string          // the user's original question — stored for feedback POST body
+  question?: string,         // the user's original question — stored for feedback POST body
+  session_id?: string,       // from API response — stored for feedback DynamoDB key
+  apiUrl?: string,           // URL used for this response — feedback POSTs back to the same endpoint
 }
 ```
 
 ## API Integration (ChatInput.jsx)
 
-Backend is selected at build time via `VITE_ACTIVE_BACKEND` env var. No UI toggle exists.
+Backend is selected at **runtime** via `activeBackend` state (toggled in Header). Both backends share the same DynamoDB table and session.
 
-### Institutional backend (default, `VITE_ACTIVE_BACKEND=institutional`)
-- Env var: `VITE_INSTITUTIONAL_API_URL`, `VITE_INSTITUTIONAL_API_KEY`
-- Backend: AWS API Gateway → AWS Bedrock Flow (multi-agent)
-- Chat request: `POST /student` `{ question }`
-- Chat response: triple-nested JSON — unwrap: `data.result.body` → `result.body` → `responses[agentKey]`
-- Feedback request: `POST /student/feedback` `{ question, answer, rating, comment }` (backend TBD)
-- Timestamp: client-generated ISO string (no session management)
+### Single-agent backend (`activeBackend === 'single_agent'`)
+- Env var: `VITE_SINGLE_AGENT_API_URL`
+- Backend: AWS API Gateway HTTP API → Lambda
+- Chat request: `POST /primitive` `{ action: 'chat', prompt, session_id? }`
+- Chat response: `{ response, session_id, timestamp }` (direct JSON)
+- No API key required
 
-### Tunca-hoca backend (fallback, `VITE_ACTIVE_BACKEND=tunca-hoca`)
-- Env var: `VITE_TUNCA_API_URL`, `VITE_TUNCA_API_KEY`
-- Backend: AWS Lambda
-- Chat request: `{ prompt, session_id? }`
-- Chat response: `{ response, session_id, timestamp }`
-- Feedback request: `{ action: 'feedback', session_id, timestamp, feedback_value: 'Positive' | 'Negative' }` (stars ≥3 → Positive)
-- Session stored in `localStorage` as `v2_session_id`
+### Multi-agent backend (`activeBackend === 'multi_agent'`)
+- Env var: `VITE_MULTI_AGENT_API_URL`
+- Backend: AWS Lambda Function URL (multi-agent orchestrator)
+- Chat request: `POST /` `{ action: 'chat', prompt, session_id? }`
+- Chat response: `{ statusCode, body: "<json string>" }` — must `JSON.parse(data.body)` to get `{ response, session_id, timestamp }`
+- No API key required
 
 **API call flow:**
 1. Add human message to history
 2. Add placeholder message with unique ID (cycling animated loading messages)
-3. Fetch from active backend
+3. Fetch from active backend URL
 4. Replace placeholder with real response (`skipTypewriter: true` — instant display)
-5. Store `timestamp` and `question` on the AI message for feedback
+5. Store `timestamp`, `question`, `session_id`, and `apiUrl` on the AI message
 
-**Constraints:** Max 30 messages. Session cleared on language switch.
+**Session management:** `session_id` stored in `localStorage` as `session_id`. Cleared on language switch. Both backends share the same DynamoDB so switching backends mid-conversation is seamless.
+
+**Constraints:** Max 30 messages.
 
 ## Feedback System (FeedbackModal.jsx)
 
 - Triggered by "💬 Geri bildirimde bulun" button shown on AI messages after typing completes
+- Button has a wiggle animation (`feedback-emoji-wiggle` CSS class) on appearance
 - Requires `timestamp` to be present on the message
 - Hidden after submission (`feedbackSubmitted` state in ChatMessage)
 - Modal contains:
   - 5-star rating with half-star support (0.5 increments via left/right half-hover)
   - Optional comment textarea
   - Bilingual TR/EN labels
-- Posts to institutional or tunca-hoca feedback endpoint based on `VITE_ACTIVE_BACKEND`
+- POSTs to the `apiUrl` stored on the message (same endpoint that generated the response)
+- Request body: `{ action: 'feedback', session_id, timestamp, feedback_value: 'Positive'|'Negative', rating: 0-10, feedback_reason? }`
+  - `feedback_value`: `'Positive'` if stars ≥ 3, else `'Negative'`
+  - `rating`: stars × 2 (0–5 star scale → 0–10 integer)
+
+## Backend Toggle (Header.jsx)
+
+- Top-left of header: a fixed 48×48px box with red border
+- Single agent: one 🤖 centered in the box
+- Multi agent: three 🤖 arranged in a triangle (top-center, bottom-left, bottom-right)
+- Animation: GPU-only — only `transform` and `opacity` animate (no layout reflow). Robots are always at `top: 50%; left: 50%`; movement encoded as `translate()` offsets; size change via `scale(0.65)`.
+- `willChange: 'transform, opacity'` set on each robot span
+- Label below the box shows current mode, changes on toggle
 
 ## Styling
 - Tailwind CSS v3 with custom colors in `tailwind.config.js`:
-  - `primary`: `#1e2729` (dark bg)
+  - `primary`: `#050609` (near-black bg)
   - `secondary`: `#b72e2e` (brand red)
-  - `tertiary`: `#EDF2F4` (light gray)
-- Custom CSS in `index.css`: `.scrollable`, `.scroll-container`, `.custom-toast`
+  - `secondary-red`: `#b5172f` (hover state red)
+  - `tertiary`: `#EDF2F4` (light gray text)
+  - `black`: `#1c1c1c` (card/input bg)
+  - `white-text`: `#ffffff`
+- Custom CSS in `index.css`: `.scrollable`, `.scroll-container`, `.custom-toast`, `.feedback-emoji-wiggle`
+- `feedback-emoji-wiggle`: one-shot damped rotation (8° → 6° → 3°) on feedback button appearance, respects `prefers-reduced-motion`
 - Responsive breakpoints: `sm:`, `md:` via Tailwind
 
 ## Key Libraries
@@ -100,13 +120,11 @@ Backend is selected at build time via `VITE_ACTIVE_BACKEND` env var. No UI toggl
 
 ## Environment Variables
 ```
-VITE_INSTITUTIONAL_API_URL    # active backend (default)
-VITE_INSTITUTIONAL_API_KEY
-VITE_TUNCA_API_URL            # fallback backend
-VITE_TUNCA_API_KEY
-VITE_ACTIVE_BACKEND           # 'institutional' | 'tunca-hoca'
+VITE_SINGLE_AGENT_API_URL     # AWS API Gateway HTTP API URL
+VITE_MULTI_AGENT_API_URL      # AWS Lambda Function URL
+VITE_ACTIVE_BACKEND           # 'single_agent' | 'multi_agent' — sets initial toggle state at load
 ```
-All API keys/URLs are env-var only — never hardcoded.
+No API keys — both backends are public endpoints protected only by AWS rate limiting.
 
 ## Dev Commands
 ```bash
@@ -127,4 +145,4 @@ npm run lint     # ESLint
 - `GiDeerHead` icon (react-icons/gi) used as AI avatar; `FaStar`/`FaStarHalfStroke` for feedback rating
 - `dangerouslySetInnerHTML` used only in `InfoModal.jsx` for controlled bilingual HTML content
 - No routing — single view SPA
-- Language switch clears chat history (with confirmation dialog)
+- Language switch clears chat history and `session_id` (with confirmation dialog if history exists)

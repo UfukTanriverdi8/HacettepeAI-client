@@ -2,7 +2,7 @@ import { FaLinkedin, FaGithub, FaInfoCircle} from "react-icons/fa"
 const Footer = ({ onInfoClick }) => {
 
   return (
-  <div className="flex justify-center items-center text-tertiary bg-primary w-full py-2">
+  <div className="flex justify-center items-center text-black-text text-opacity-70 w-full py-2">
    <div className="text-2xl transition-all duration-300 hover:text-[#9ca3af] mr-5">
       <a
         href="https://github.com/UfukTanriverdi8/HacettepeAI-client"
