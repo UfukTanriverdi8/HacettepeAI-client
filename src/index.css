@@ -4,7 +4,7 @@
 
 .scrollable {
     scrollbar-width: thin;
-    scrollbar-color: #e21936 #000000;
+    scrollbar-color: #b72e2e #1c1c1c;
   }
 
 .scroll-container{
@@ -22,6 +22,39 @@
   
   .custom-toast .Toastify__progress-bar {
     background-color: #e21936; /* color of the progress bar */
+  }
+
+  @keyframes feedback-wiggle {
+    0%, 70%, 100% {
+      transform: rotate(0deg);
+    }
+    75% {
+      transform: rotate(-8deg);
+    }
+    80% {
+      transform: rotate(8deg);
+    }
+    85% {
+      transform: rotate(-6deg);
+    }
+    90% {
+      transform: rotate(6deg);
+    }
+    95% {
+      transform: rotate(-3deg);
+    }
+  }
+
+  .feedback-emoji-wiggle {
+    display: inline-block;
+    transform-origin: 50% 70%;
+    animation: feedback-wiggle 2.8s ease-in-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .feedback-emoji-wiggle {
+      animation: none;
+    }
   }
 
 /* .normal_cursor{
