@@ -1,5 +1,8 @@
 # Hacettepe AI Client - Project Context
 
+## Git Commits
+Never add a "Co-Authored-By: Claude..." line or any other self-attribution to commit messages.
+
 ## Project Overview
 Single-page React chatbot application for Hacettepe University AI assistant.
 Built with Vite + React 18 + Tailwind CSS. Deployed on Digital Ocean.
