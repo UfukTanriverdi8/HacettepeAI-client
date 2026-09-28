@@ -132,6 +132,8 @@ spells out why they cannot be withheld). The client drops them and returns to th
 `lastStatus` is kept in `sendPrompt`'s closure for exactly this: the `token` handler nulls
 `status`, so without it the bubble would fall back to the cycling placeholder for the moment
 before the next status event lands.
+Whether preamble should stay visible instead, interleaved the way Claude.ai shows it, is open
+as #22; change neither side of `discard` without settling that first.
 
 ### Source bubbles
 
@@ -204,7 +206,9 @@ question — follow-up questions work without sending prior turns.
   `@import`-ed from `index.css`: Tailwind's PostCSS plugin inlines the file but leaves its
   relative `url()`s pointing at font files Vite never copies, and the font silently falls back.
 - `.markdown` in `index.css` styles answers (lists, links, tables, code). The typography plugin
-  is not installed; Tailwind's preflight otherwise strips list bullets.
+  is not installed; Tailwind's preflight otherwise strips list bullets. Its rules are
+  unlayered, so they beat every Tailwind utility on elements inside an answer. Exclude new
+  elements by class (`.markdown a:not(.cite)`) rather than fighting them with utilities.
 - Scrollbar: global in `@layer base`, thin, thumb `--scrollbar`, no track.
 - `feedback-icon-wiggle`: one-shot damped rotation (8° → 6° → 3°) on feedback button
   appearance. `animate-breathe` pulses the deer while an answer is pending. Both respect
@@ -225,6 +229,9 @@ so far: `Button`, `PopoverTrigger`, `TooltipTrigger`, `DialogTrigger`, `DialogCl
 `DialogOverlay`, `HoverCardTrigger`. Do the same to any new wrapper in one of those positions,
 re-apply after `shadcn add --overwrite`, and check the dev server's console, since production
 builds are silent about it.
+
+Radix behavior questions (what opens on focus or touch, what counts as "outside") are answered
+fastest by `node_modules/@radix-ui/react-<name>/dist/index.mjs`.
 
 `react-refresh/only-export-components` is off for `src/components/ui/**`, which exports
 variant helpers beside components the way upstream does.
@@ -268,6 +275,8 @@ npm run build    # type-check (tsc), then production build; a type error fails i
 npm run typecheck # tsc alone
 npm run preview  # preview production build
 npm run lint     # ESLint
+npm run check:smoothing  # reveal math (scripts/check-smoothing.mjs); see Testing
+npm run check:citations  # bubble placement (scripts/check-citations.mjs); see Testing
 ```
 
 `npm run lint` passes with zero problems; treat any new one as a regression. `react/prop-types`
@@ -315,6 +324,9 @@ which is enough because the pieces worth checking have no DOM in them:
   both builds with `vite preview` on two ports, and screenshot them with Playwright. `preview`
   inherits `server.proxy`, so the same `:8000` mock drives a full streamed answer in both.
   Wait ~600ms after focusing a button: `transition-all` fades the focus ring in.
+- Touch behavior → Playwright `newContext({ hasTouch: true, isMobile: true })` and
+  `locator.tap()`. A link opened from the sandbox lands on `chrome-error://`: the tab opened,
+  the external host is just unreachable.
 
 ## Deploy
 Runs from `../hacettepe-ai-backend/infra`, which reads this repo's `dist/` — `npm run build` first.
@@ -376,3 +388,5 @@ next PR is refused as "Head branch is out of date".
 - The shell is zsh: an unquoted `$files` is one argument, not a list, and `$PIPESTATUS` does not
   exist. Loop explicitly or pass paths to `git restore --source=HEAD -- <paths>`; never pair
   a deleting step with a restoring step that relies on word-splitting.
+- Stop background servers by PID (`pgrep -af <pattern>`, then `kill <pid>`), never
+  `pkill -f <pattern>`: the pattern also matches the tool's own shell and kills the command.
