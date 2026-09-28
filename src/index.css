@@ -171,7 +171,9 @@
 .markdown li::marker {
   color: var(--muted-foreground);
 }
-.markdown a {
+/* Source bubbles are links too, styled by their own utilities. Unlayered rules like this one
+   beat every Tailwind utility, so they have to be left out here rather than overridden. */
+.markdown a:not(.cite) {
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 3px;

@@ -24,6 +24,7 @@ App.tsx                         # Root: global state, layout, the empty-chat gre
 │   └── SettingsMenu.tsx        # Popover: theme (system/light/dark) and UI language
 ├── ChatConversations.tsx       # Scrollable message list container
 │   └── ChatMessage.tsx         # Question pill or answer; streamed answers go through useSmoothedText
+│       ├── CitationBubbles.tsx # Numbered source bubbles, each with a HoverCard preview
 │       └── FeedbackModal.tsx   # 5-star feedback dialog (shown per AI message)
 ├── ChatInput.tsx               # The composer: input, send, API calls
 ├── InfoModal.tsx               # About dialog: project text, GitHub link, version
@@ -101,6 +102,7 @@ Response: **NDJSON**, one JSON object per line, `Content-Type: application/x-ndj
 | `status` | `message` (English) | store raw; `ChatMessage` shows it via `describeStatus` (`src/statusText.ts`): localized text, plus that step's icon in place of the deer |
 | `token` | `text` | **append** to the accumulated answer, clear `isPlaceholder` |
 | `discard` | — | drop every token so far; back to `isPlaceholder` with the last status |
+| `sources` | `sources`, `citations` | store both on the message; bubbles render once the reveal completes. Sent after the last `token`, before `done`; both lists empty when nothing is cited |
 | `done` | `timestamp?` | store as the feedback key; absent when the server's write failed |
 | `error` | `message` | show it in place of the placeholder; do not throw |
 
@@ -130,6 +132,28 @@ spells out why they cannot be withheld). The client drops them and returns to th
 `lastStatus` is kept in `sendPrompt`'s closure for exactly this: the `token` handler nulls
 `status`, so without it the bubble would fall back to the cycling placeholder for the moment
 before the next status event lands.
+
+### Source bubbles
+
+`sources[].n` is the number on a bubble; `kind` is `webpage`, `document` or `live` (a page
+fetched during this answer, drawn in `primary`). `citations[].offset` is where a cited passage
+ends in the concatenated token text, in UTF-16 units. remark's node positions index the same
+string, so `placeCitations` (`src/citations.ts`) maps each offset straight onto the paragraph,
+heading or table cell containing it and appends one bubble group at that block's end. An offset
+in a gap goes to the block before it, and a source with no citation entry (an uncited live
+fetch) goes on the last block. A list item's text is a paragraph in mdast, so list items need
+no case of their own.
+
+The plugin is added only once `isTypingComplete`, the feedback button's gate: the offsets index
+the full answer, and on a partly revealed prefix they would land on the wrong blocks. Answers
+from before 3.2.0 have no `sources` and show no bubbles.
+
+Each bubble is a link inside a Radix HoverCard. Mouse: hover previews, a click opens the
+source. Keyboard: focus previews, Enter opens. Touch: the first tap previews (the click is
+`preventDefault`ed when the preceding `pointerdown` was touch) and the card itself is the link.
+Radix's trigger calls `preventDefault` in a passive touchstart listener, so mobile Chrome logs
+"Unable to preventDefault inside passive event listener"; it is harmless. `.markdown a` is
+unlayered CSS and would beat the bubbles' utilities, so it excludes `.cite`.
 
 **Call flow:**
 1. Add human message to history
@@ -198,9 +222,9 @@ its DOM node up, and the popover or tooltip it opens stays unpositioned at
 with a dev-only "Function components cannot be given refs" warning: `DialogOverlay` inside the
 portal, or `PopoverTrigger` nested in `TooltipTrigger asChild`. Wrapped in `React.forwardRef`
 so far: `Button`, `PopoverTrigger`, `TooltipTrigger`, `DialogTrigger`, `DialogClose`,
-`DialogOverlay`. Do the same to any new wrapper in one of those positions, re-apply after
-`shadcn add --overwrite`, and check the dev server's console, since production builds are
-silent about it.
+`DialogOverlay`, `HoverCardTrigger`. Do the same to any new wrapper in one of those positions,
+re-apply after `shadcn add --overwrite`, and check the dev server's console, since production
+builds are silent about it.
 
 `react-refresh/only-export-components` is off for `src/components/ui/**`, which exports
 variant helpers beside components the way upstream does.
@@ -209,7 +233,7 @@ variant helpers beside components the way upstream does.
 | Library | Purpose |
 |---|---|
 | `react-markdown` + `remark-gfm` | Render AI responses as Markdown |
-| `radix-ui` (via shadcn) | Dialog, Popover, ToggleGroup, Tooltip: focus, Esc, ARIA |
+| `radix-ui` (via shadcn) | Dialog, HoverCard, Popover, ToggleGroup, Tooltip: focus, Esc, ARIA |
 | `lucide-react` | Interface icons |
 | `react-icons` | Only what lucide lacks: `FaStar`/`FaStarHalfStroke`, `FaGithub` |
 | `react-toastify` | Toast notifications |
@@ -276,6 +300,10 @@ which is enough because the pieces worth checking have no DOM in them:
   `erasableSyntaxOnly`: an `enum` in that file would break the script, not the build. It exists
   because the reveal math fails quietly: a step that never quite reaches the goal drops the last
   characters of every answer, which is easy to miss by eye.
+- `npm run check:citations` → `scripts/check-citations.mjs`, running `placeCitations` over
+  mdast from the parser react-markdown uses (`mdast-util-from-markdown` + gfm, devDependencies
+  for this script only). Covers the paragraph-end boundary, gaps, nested lists, table cells,
+  uncited sources and an emoji before an offset.
 - The NDJSON stream reader was proven the same way, against 1-byte chunks — which splits every
   line and every multi-byte UTF-8 character.
 - Wire behavior → a mock NDJSON server on `:8000` + `curl -sN | while read` with per-line

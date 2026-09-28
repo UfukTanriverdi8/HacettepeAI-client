@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import type { ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
+import type { Components, ExtraProps } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MessageSquare } from 'lucide-react'
 import DeerMark from './DeerMark'
+import CitationBubbles from './CitationBubbles'
 import FeedbackModal from './FeedbackModal'
+import { remarkCitations } from '../citations'
 import { useCyclingText } from '../hooks/useCyclingText'
 import { useSmoothedText } from '../hooks/useSmoothedText'
 import { describeStatus } from '../statusText'
@@ -20,12 +24,21 @@ const LOADING_MESSAGES: Record<Language, readonly string[]> = {
     EN: ['Thinking...'],
 }
 
-type ChatMessageProps = Pick<Message, 'sender' | 'message' | 'isPlaceholder' | 'status' | 'timestamp' | 'session_id'> & {
+// placeCitations marks each bubble group as a span with a data-cite list; any other span passes
+// through untouched.
+const citationSpan = (sources: NonNullable<Message['sources']>, language: Language) =>
+    function CitationSpan({ node, ...props }: ComponentProps<'span'> & ExtraProps) {
+        const cite = node?.properties.dataCite
+        if (typeof cite !== 'string') return <span {...props} />
+        return <CitationBubbles numbers={cite.split(',').map(Number)} sources={sources} language={language} />
+    }
+
+type ChatMessageProps = Pick<Message, 'sender' | 'message' | 'isPlaceholder' | 'status' | 'timestamp' | 'session_id' | 'sources' | 'citations'> & {
     feedbackUrl: string
     language: Language
 }
 
-const ChatMessage = ({ sender, message, isPlaceholder, status, timestamp, session_id, feedbackUrl, language }: ChatMessageProps) => {
+const ChatMessage = ({ sender, message, isPlaceholder, status, timestamp, session_id, sources, citations, feedbackUrl, language }: ChatMessageProps) => {
     const cyclingMsg = useCyclingText(LOADING_MESSAGES[language])
     // Streamed answers animate toward the text received so far; history and human turns show
     // at once. The smoother tells them apart by whether the text grew after mounting.
@@ -38,6 +51,19 @@ const ChatMessage = ({ sender, message, isPlaceholder, status, timestamp, sessio
     // it appear on the `done` event while the smoother is still catching up.
     const isTypingComplete = displayedMsg === message
     const showFeedbackButton = sender === 'AI' && !isPlaceholder && isTypingComplete && timestamp && !feedbackSubmitted
+    // Offsets index the full answer, so bubbles wait for the reveal to finish, like the feedback
+    // button: added to a partly revealed prefix, they would land on the wrong paragraphs. Memoized
+    // so a finished answer's bubbles keep their identity, and an open card its state, when
+    // ChatConversations re-renders for a later message.
+    const showCitations = sender === 'AI' && !isPlaceholder && isTypingComplete && !!sources?.length
+    const remarkPlugins = useMemo(
+        () => showCitations ? [remarkGfm, remarkCitations(sources!, citations ?? [])] : [remarkGfm],
+        [showCitations, sources, citations],
+    )
+    const components = useMemo<Components | undefined>(
+        () => showCitations ? { span: citationSpan(sources!, language) } : undefined,
+        [showCitations, sources, language],
+    )
     // Before the first status the placeholder only knows the question was sent, so the deer
     // waits; once the server says what it is doing, that step's icon stands in until text arrives.
     const pending = status ? describeStatus(status, language) : null
@@ -63,7 +89,7 @@ const ChatMessage = ({ sender, message, isPlaceholder, status, timestamp, sessio
                     <p className="text-muted-foreground" aria-live="polite">{pending?.text ?? cyclingMsg}</p>
                 ) : (
                     <div className="markdown w-full">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
                             {displayedMsg}
                         </ReactMarkdown>
                     </div>

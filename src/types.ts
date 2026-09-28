@@ -24,6 +24,24 @@ export interface Message {
     timestamp?: string
     // From the `session` event; the feedback DynamoDB partition key.
     session_id?: string | null
+    // From the `sources` event. Absent on answers from before 3.2.0, which show no bubbles.
+    sources?: Source[]
+    citations?: Citation[]
+}
+
+/** One source behind an answer; `n` is the number on its bubble. */
+export interface Source {
+    n: number
+    url: string
+    title: string
+    // 'live' is a page fetched while writing this answer, the rest are knowledge base copies.
+    kind: 'webpage' | 'document' | 'live'
+}
+
+/** Where a cited passage ends in the answer, in UTF-16 units (JS string indices). */
+export interface Citation {
+    offset: number
+    n: number[]
 }
 
 /** One line of the /chat NDJSON stream. */
@@ -32,6 +50,8 @@ export type StreamEvent =
     | { type: 'status'; message: string }
     | { type: 'token'; text: string }
     | { type: 'discard' }
+    // After the last token, before done. Both lists are empty when the answer cites nothing.
+    | { type: 'sources'; sources: Source[]; citations: Citation[] }
     // timestamp is absent when the server's DynamoDB write failed.
     | { type: 'done'; timestamp?: string }
     | { type: 'error'; message: string }
