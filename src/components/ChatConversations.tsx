@@ -55,7 +55,7 @@ const ChatConversations = ({ chatHistory, language, feedbackUrl, style }: ChatCo
     <div ref={chatContainerRef} onScroll={handleScroll} style={style} className="min-h-0 basis-0 overflow-y-auto transition-[flex-grow] duration-500 ease-out motion-reduce:transition-none">
       <div ref={contentRef} className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-4 pb-6 text-[15px]">
         {chatHistory.map((chat, index) => (
-          <ChatMessage key={index} sender={chat.sender} message={chat.message} isPlaceholder={chat.isPlaceholder} status={chat.status} timestamp={chat.timestamp} session_id={chat.session_id} feedbackUrl={feedbackUrl} language={language} />
+          <ChatMessage key={index} sender={chat.sender} message={chat.message} isPlaceholder={chat.isPlaceholder} status={chat.status} timestamp={chat.timestamp} session_id={chat.session_id} sources={chat.sources} citations={chat.citations} feedbackUrl={feedbackUrl} language={language} />
         ))}
       </div>
     </div>

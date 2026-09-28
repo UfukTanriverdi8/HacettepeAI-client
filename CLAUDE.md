@@ -24,6 +24,7 @@ App.tsx                         # Root: global state, layout, the empty-chat gre
 │   └── SettingsMenu.tsx        # Popover: theme (system/light/dark) and UI language
 ├── ChatConversations.tsx       # Scrollable message list container
 │   └── ChatMessage.tsx         # Question pill or answer; streamed answers go through useSmoothedText
+│       ├── CitationBubbles.tsx # Numbered source bubbles, each with a HoverCard preview
 │       └── FeedbackModal.tsx   # 5-star feedback dialog (shown per AI message)
 ├── ChatInput.tsx               # The composer: input, send, API calls
 ├── InfoModal.tsx               # About dialog: project text, GitHub link, version
@@ -101,6 +102,7 @@ Response: **NDJSON**, one JSON object per line, `Content-Type: application/x-ndj
 | `status` | `message` (English) | store raw; `ChatMessage` shows it via `describeStatus` (`src/statusText.ts`): localized text, plus that step's icon in place of the deer |
 | `token` | `text` | **append** to the accumulated answer, clear `isPlaceholder` |
 | `discard` | — | drop every token so far; back to `isPlaceholder` with the last status |
+| `sources` | `sources`, `citations` | store both on the message; bubbles render once the reveal completes. Sent after the last `token`, before `done`; both lists empty when nothing is cited |
 | `done` | `timestamp?` | store as the feedback key; absent when the server's write failed |
 | `error` | `message` | show it in place of the placeholder; do not throw |
 
@@ -130,6 +132,30 @@ spells out why they cannot be withheld). The client drops them and returns to th
 `lastStatus` is kept in `sendPrompt`'s closure for exactly this: the `token` handler nulls
 `status`, so without it the bubble would fall back to the cycling placeholder for the moment
 before the next status event lands.
+Whether preamble should stay visible instead, interleaved the way Claude.ai shows it, is open
+as #22; change neither side of `discard` without settling that first.
+
+### Source bubbles
+
+`sources[].n` is the number on a bubble; `kind` is `webpage`, `document` or `live` (a page
+fetched during this answer, drawn in `primary`). `citations[].offset` is where a cited passage
+ends in the concatenated token text, in UTF-16 units. remark's node positions index the same
+string, so `placeCitations` (`src/citations.ts`) maps each offset straight onto the paragraph,
+heading or table cell containing it and appends one bubble group at that block's end. An offset
+in a gap goes to the block before it, and a source with no citation entry (an uncited live
+fetch) goes on the last block. A list item's text is a paragraph in mdast, so list items need
+no case of their own.
+
+The plugin is added only once `isTypingComplete`, the feedback button's gate: the offsets index
+the full answer, and on a partly revealed prefix they would land on the wrong blocks. Answers
+from before 3.2.0 have no `sources` and show no bubbles.
+
+Each bubble is a link inside a Radix HoverCard. Mouse: hover previews, a click opens the
+source. Keyboard: focus previews, Enter opens. Touch: the first tap previews (the click is
+`preventDefault`ed when the preceding `pointerdown` was touch) and the card itself is the link.
+Radix's trigger calls `preventDefault` in a passive touchstart listener, so mobile Chrome logs
+"Unable to preventDefault inside passive event listener"; it is harmless. `.markdown a` is
+unlayered CSS and would beat the bubbles' utilities, so it excludes `.cite`.
 
 **Call flow:**
 1. Add human message to history
@@ -180,7 +206,9 @@ question — follow-up questions work without sending prior turns.
   `@import`-ed from `index.css`: Tailwind's PostCSS plugin inlines the file but leaves its
   relative `url()`s pointing at font files Vite never copies, and the font silently falls back.
 - `.markdown` in `index.css` styles answers (lists, links, tables, code). The typography plugin
-  is not installed; Tailwind's preflight otherwise strips list bullets.
+  is not installed; Tailwind's preflight otherwise strips list bullets. Its rules are
+  unlayered, so they beat every Tailwind utility on elements inside an answer. Exclude new
+  elements by class (`.markdown a:not(.cite)`) rather than fighting them with utilities.
 - Scrollbar: global in `@layer base`, thin, thumb `--scrollbar`, no track.
 - `feedback-icon-wiggle`: one-shot damped rotation (8° → 6° → 3°) on feedback button
   appearance. `animate-breathe` pulses the deer while an answer is pending. Both respect
@@ -198,9 +226,12 @@ its DOM node up, and the popover or tooltip it opens stays unpositioned at
 with a dev-only "Function components cannot be given refs" warning: `DialogOverlay` inside the
 portal, or `PopoverTrigger` nested in `TooltipTrigger asChild`. Wrapped in `React.forwardRef`
 so far: `Button`, `PopoverTrigger`, `TooltipTrigger`, `DialogTrigger`, `DialogClose`,
-`DialogOverlay`. Do the same to any new wrapper in one of those positions, re-apply after
-`shadcn add --overwrite`, and check the dev server's console, since production builds are
-silent about it.
+`DialogOverlay`, `HoverCardTrigger`. Do the same to any new wrapper in one of those positions,
+re-apply after `shadcn add --overwrite`, and check the dev server's console, since production
+builds are silent about it.
+
+Radix behavior questions (what opens on focus or touch, what counts as "outside") are answered
+fastest by `node_modules/@radix-ui/react-<name>/dist/index.mjs`.
 
 `react-refresh/only-export-components` is off for `src/components/ui/**`, which exports
 variant helpers beside components the way upstream does.
@@ -209,7 +240,7 @@ variant helpers beside components the way upstream does.
 | Library | Purpose |
 |---|---|
 | `react-markdown` + `remark-gfm` | Render AI responses as Markdown |
-| `radix-ui` (via shadcn) | Dialog, Popover, ToggleGroup, Tooltip: focus, Esc, ARIA |
+| `radix-ui` (via shadcn) | Dialog, HoverCard, Popover, ToggleGroup, Tooltip: focus, Esc, ARIA |
 | `lucide-react` | Interface icons |
 | `react-icons` | Only what lucide lacks: `FaStar`/`FaStarHalfStroke`, `FaGithub` |
 | `react-toastify` | Toast notifications |
@@ -244,6 +275,8 @@ npm run build    # type-check (tsc), then production build; a type error fails i
 npm run typecheck # tsc alone
 npm run preview  # preview production build
 npm run lint     # ESLint
+npm run check:smoothing  # reveal math (scripts/check-smoothing.mjs); see Testing
+npm run check:citations  # bubble placement (scripts/check-citations.mjs); see Testing
 ```
 
 `npm run lint` passes with zero problems; treat any new one as a regression. `react/prop-types`
@@ -276,6 +309,10 @@ which is enough because the pieces worth checking have no DOM in them:
   `erasableSyntaxOnly`: an `enum` in that file would break the script, not the build. It exists
   because the reveal math fails quietly: a step that never quite reaches the goal drops the last
   characters of every answer, which is easy to miss by eye.
+- `npm run check:citations` → `scripts/check-citations.mjs`, running `placeCitations` over
+  mdast from the parser react-markdown uses (`mdast-util-from-markdown` + gfm, devDependencies
+  for this script only). Covers the paragraph-end boundary, gaps, nested lists, table cells,
+  uncited sources and an emoji before an offset.
 - The NDJSON stream reader was proven the same way, against 1-byte chunks — which splits every
   line and every multi-byte UTF-8 character.
 - Wire behavior → a mock NDJSON server on `:8000` + `curl -sN | while read` with per-line
@@ -287,16 +324,24 @@ which is enough because the pieces worth checking have no DOM in them:
   both builds with `vite preview` on two ports, and screenshot them with Playwright. `preview`
   inherits `server.proxy`, so the same `:8000` mock drives a full streamed answer in both.
   Wait ~600ms after focusing a button: `transition-all` fades the focus ring in.
+- Touch behavior → Playwright `newContext({ hasTouch: true, isMobile: true })` and
+  `locator.tap()`. A link opened from the sandbox lands on `chrome-error://`: the tab opened,
+  the external host is just unreachable.
 
 ## Deploy
 Runs from `../hacettepe-ai-backend/infra`, which reads this repo's `dist/` — `npm run build` first.
 ```bash
 cd ../hacettepe-ai-backend/infra && set -a && . ../.env && set +a && . .venv/bin/activate
-npx --yes aws-cdk@2 deploy HacettepeAiFrontendStack
+npx --yes aws-cdk@2.1142.0 deploy HacettepeAiFrontendStack
 ```
 Both the `.env` source and the venv activation must be in the same shell as `npx`. `cdk.json`
 runs bare `python app.py`, which exists only inside `.venv`; and synth builds *both* stacks,
 so `ORIGIN_VERIFY_SECRET` and `BUDGET_ALERT_EMAIL` are required even for a frontend-only deploy.
+
+The CLI version is the backend's pin, not this repo's: its CLAUDE.md pairs CLI 2.1142.0 with
+`aws-cdk-lib` 2.270.0 (`infra/requirements.txt`) as a verified combination. A floating
+`aws-cdk@2` runs an untested pair against both stacks. When the backend bumps the pin, change
+it here too.
 
 `cdk deploy` bundles the **working tree**, not a git ref — what is deployed and what is
 committed can diverge silently.
@@ -343,3 +388,5 @@ next PR is refused as "Head branch is out of date".
 - The shell is zsh: an unquoted `$files` is one argument, not a list, and `$PIPESTATUS` does not
   exist. Loop explicitly or pass paths to `git restore --source=HEAD -- <paths>`; never pair
   a deleting step with a restoring step that relies on word-splitting.
+- Stop background servers by PID (`pgrep -af <pattern>`, then `kill <pid>`), never
+  `pkill -f <pattern>`: the pattern also matches the tool's own shell and kills the command.

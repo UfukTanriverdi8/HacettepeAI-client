@@ -95,6 +95,11 @@ const ChatInput = ({chatHistory, setChatHistory, sessionId, setSessionId, langua
                     answer = ''
                     patchAiMessage({ message: '', isPlaceholder: true, status: lastStatus })
                     break
+                case 'sources':
+                    // Offsets index `answer` as it stands now: the backend sends only the final
+                    // turn's citations, and a discard already cleared any earlier text.
+                    patchAiMessage({ sources: event.sources, citations: event.citations })
+                    break
                 case 'done':
                     // timestamp is the DynamoDB sort key this answer is stored under, and is
                     // absent when the write failed — ChatMessage gates the feedback button on it.
