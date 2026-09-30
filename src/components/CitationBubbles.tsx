@@ -5,9 +5,24 @@ import type { Language, Source } from '../types'
 
 const KIND_ICON = { webpage: Globe, document: FileText, live: Radio } as const
 
+// Source URLs arrive percent-encoded (the scraper normalizes them that way), so a Turkish or
+// German path reads as %C3%B6. Decode for display only; href keeps the encoded form.
+const displayUrl = (url: string) => {
+    const bare = url.replace(/^https?:\/\//, '')
+    try {
+        return decodeURI(bare)
+    } catch {
+        return bare // malformed %-sequence
+    }
+}
+
+// The backend sends the URL as the title when a page has none.
+const hasTitle = (source: Source) => Boolean(source.title) && source.title !== source.url
+
 const bubbleLabel = (source: Source, language: Language) => {
     const live = source.kind === 'live' ? (language === 'TR' ? ' (canlı sayfa)' : ' (live page)') : ''
-    return `${language === 'TR' ? 'Kaynak' : 'Source'} ${source.n}: ${source.title}${live}`
+    const name = hasTitle(source) ? source.title : displayUrl(source.url)
+    return `${language === 'TR' ? 'Kaynak' : 'Source'} ${source.n}: ${name}${live}`
 }
 
 // Mouse: hover previews, a click on the bubble opens the source. Keyboard: focus previews,
@@ -66,12 +81,11 @@ const CitationBubble = ({ source, language }: { source: Source; language: Langua
                 >
                     <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${live ? 'text-primary' : 'text-muted-foreground'}`} />
                     <span className="min-w-0">
-                        {/* The backend sends the URL as the title when a page has none; the
-                            line below already shows it, so skip it rather than print it twice. */}
-                        {source.title && source.title !== source.url && (
+                        {/* Without a real title the URL line below already names the page. */}
+                        {hasTitle(source) && (
                             <span className="block leading-snug font-medium">{source.title}</span>
                         )}
-                        <span className="mt-0.5 block text-xs break-all text-muted-foreground">{source.url.replace(/^https?:\/\//, '')}</span>
+                        <span className="mt-0.5 block text-xs break-all text-muted-foreground">{displayUrl(source.url)}</span>
                     </span>
                 </a>
             </HoverCardContent>
