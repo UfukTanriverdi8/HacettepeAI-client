@@ -66,7 +66,11 @@ const CitationBubble = ({ source, language }: { source: Source; language: Langua
                 >
                     <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${live ? 'text-primary' : 'text-muted-foreground'}`} />
                     <span className="min-w-0">
-                        <span className="block leading-snug font-medium">{source.title}</span>
+                        {/* The backend sends the URL as the title when a page has none; the
+                            line below already shows it, so skip it rather than print it twice. */}
+                        {source.title && source.title !== source.url && (
+                            <span className="block leading-snug font-medium">{source.title}</span>
+                        )}
                         <span className="mt-0.5 block text-xs break-all text-muted-foreground">{source.url.replace(/^https?:\/\//, '')}</span>
                     </span>
                 </a>
