@@ -4,7 +4,9 @@
 Never add a "Co-Authored-By: Claude..." line or any other self-attribution to commit messages.
 
 Work lands on `dev`, then a PR to `main` (the default branch). Never commit to `main` directly.
-No CI: `.github` holds only the PR template, so a PR is not checked by anything automated.
+CI (`.github/workflows/ci.yml`) runs on pushes and PRs to `dev` and `main`: `npm ci`, lint, typecheck,
+build, `check:smoothing` and `check:citations`, on Node 24. It has no secrets and reads nothing from AWS.
+It runs the same commands as Dev Commands below, so a green local run predicts a green PR.
 Write PR bodies to `.github/PULL_REQUEST_TEMPLATE.md`'s sections.
 
 ## Project Overview
