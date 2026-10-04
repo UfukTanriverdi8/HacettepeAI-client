@@ -106,7 +106,7 @@ Response: **NDJSON**, one JSON object per line, `Content-Type: application/x-ndj
 | `discard` | — | drop every token so far; back to `isPlaceholder` with the last status |
 | `sources` | `sources`, `citations` | store both on the message; bubbles render once the reveal completes. Sent after the last `token`, before `done`; both lists empty when nothing is cited |
 | `done` | `timestamp?` | store as the feedback key; absent when the server's write failed |
-| `error` | `message` | show it in place of the placeholder; do not throw |
+| `error` | `message` | show a localized error based on the current language; log the original server error with `console.error`; do not throw |
 
 Two framing details in the reader are load-bearing. `buffer = lines.pop()` holds back the
 trailing fragment, because chunk boundaries land wherever TCP puts them rather than on newlines.
@@ -163,7 +163,7 @@ unlayered CSS and would beat the bubbles' utilities, so it excludes `.cite`.
 1. Add human message to history
 2. Add placeholder message with a unique ID (cycling animated loading messages)
 3. `fetch` the stream, then patch that one placeholder repeatedly as events arrive
-4. On `error`, or on any thrown failure, replace the placeholder with a visible message —
+4. On `error`, replace the placeholder with a localized visible message and log the original server error with `console.error`; on any thrown failure, replace the placeholder with a visible localized message —
    never leave it cycling
 
 **Session management:** `session_id` lives in `localStorage` under `session_id`. Cleared by
