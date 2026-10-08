@@ -5,6 +5,10 @@ import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
 import type { Language, Message, StreamEvent } from '../types';
 
+const ERROR_MESSAGE = {
+    EN: 'Sorry, something went wrong. Please try again.',
+    TR: 'Üzgünüm, bir şeyler ters gitti. Lütfen tekrar deneyin.',
+}
 interface ChatInputProps {
     chatHistory: Message[]
     setChatHistory: Dispatch<SetStateAction<Message[]>>
@@ -107,7 +111,12 @@ const ChatInput = ({chatHistory, setChatHistory, sessionId, setSessionId, langua
                     break
                 case 'error':
                     errorShown = true
-                    patchAiMessage({ message: event.message, isPlaceholder: false, status: null })
+                    console.error(event.message)
+                    patchAiMessage({
+                        message: ERROR_MESSAGE[language],
+                        isPlaceholder: false,
+                        status: null
+                    })
                     break
             }
         }
@@ -156,9 +165,7 @@ const ChatInput = ({chatHistory, setChatHistory, sessionId, setSessionId, langua
             // to localStorage in that state.
             if (!errorShown) {
                 patchAiMessage({
-                    message: language === 'EN'
-                        ? 'Sorry, something went wrong. Please try again.'
-                        : 'Üzgünüm, bir şeyler ters gitti. Lütfen tekrar deneyin.',
+                    message: ERROR_MESSAGE[language],
                     isPlaceholder: false,
                     status: null
                 })
