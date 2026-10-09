@@ -9,14 +9,15 @@ interface ChatInputProps {
     chatHistory: Message[]
     setChatHistory: Dispatch<SetStateAction<Message[]>>
     // Owned by App, because the header's new-chat button clears it too.
+    inputValue: string
+    setInputValue: (value: string) => void
     sessionId: string | null
     setSessionId: (sessionId: string | null) => void
     language: Language
     chatUrl: string
 }
 
-const ChatInput = ({chatHistory, setChatHistory, sessionId, setSessionId, language, chatUrl}: ChatInputProps) => {
-    const [inputValue, setInputValue] = useState('');
+const ChatInput = ({chatHistory, setChatHistory, inputValue, setInputValue, sessionId, setSessionId, language, chatUrl}: ChatInputProps) => {
     const [loading, setLoading] = useState(false);
 
       const sendPrompt = async (e: FormEvent<HTMLFormElement>) => {

@@ -14,11 +14,26 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.min.css';
 import type { AppConfig, Message } from './types'
 
+const EXAMPLE_QUESTIONS = {
+    EN: [
+        'Placeholder: What is a fictional fact about Hacettepe?',
+        'Placeholder: Can you invent a Hacettepe tradition?',
+        'Placeholder: Describe an imaginary Hacettepe event.',
+        'Placeholder: What would a fictional Hacettepe building look like?',
+    ],
+    TR: [
+        'Yer tutucu: Hacettepe hakkında hayali bir bilgi nedir?',
+        'Yer tutucu: Hayali bir Hacettepe geleneği oluşturabilir misin?',
+        'Yer tutucu: Hayali bir Hacettepe etkinliğini anlatır mısın?',
+        'Yer tutucu: Hayali bir Hacettepe binası nasıl görünürdü?',
+    ],
+}
+
 const App =  () => {
     const { theme, setTheme, language, setLanguage } = useSettings()
     const [infoOpen, setInfoOpen] = useState(false)
     const [newChatOpen, setNewChatOpen] = useState(false)
-
+    const [inputValue, setInputValue] = useState('')
     const [chatHistory, setChatHistory] = useState<Message[]>(() => {
         // Retrieve chat history from localStorage or default to []
         const savedChatHistory = localStorage.getItem('chatHistory')
@@ -93,11 +108,24 @@ const App =  () => {
             >
                 <div className="overflow-hidden">
                     <div className="flex flex-col items-center gap-3 px-4 pb-6 text-center">
-                        <DeerMark className="size-10 text-primary" />
-                        <h2 className="text-2xl font-medium tracking-tight text-balance">
-                            {tr ? 'Merhaba! Bugün size nasıl yardımcı olabilirim?' : 'Hello! How can I help you today?'}
-                        </h2>
-                    </div>
+    <DeerMark className="size-10 text-primary" />
+    <h2 className="text-2xl font-medium tracking-tight text-balance">
+        {tr ? 'Merhaba! Bugün size nasıl yardımcı olabilirim?' : 'Hello! How can I help you today?'}
+    </h2>
+    <div className="flex flex-wrap justify-center gap-2">
+        {EXAMPLE_QUESTIONS[language].map((question) => (
+            <button
+                key={question}
+                type="button"
+                onClick={() => setInputValue(question)}
+                className="rounded-full border px-3 py-2 text-sm transition-colors hover:bg-muted"
+            >
+                {question}
+            </button>
+        ))}
+    </div>
+</div>
+
                 </div>
             </div>
             <div className="mx-auto w-full max-w-3xl shrink-0 px-4">
@@ -105,6 +133,8 @@ const App =  () => {
                     language={language}
                     chatHistory={chatHistory}
                     setChatHistory={setChatHistory}
+                    inputValue={inputValue}
+                    setInputValue={setInputValue}
                     sessionId={sessionId}
                     setSessionId={setSessionId}
                     chatUrl={config.chatUrl}
