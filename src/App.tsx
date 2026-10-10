@@ -9,16 +9,31 @@ import ConfigErrorScreen from './components/ConfigErrorScreen'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { loadConfig } from './config'
 import { useSettings } from './hooks/useSettings'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.min.css';
 import type { AppConfig, Message } from './types'
 
-const App =  () => {
+const EXAMPLE_QUESTIONS = {
+    EN: [
+        'Placeholder: What is a fictional fact about Hacettepe?',
+        'Placeholder: Can you invent a Hacettepe tradition?',
+        'Placeholder: Describe an imaginary Hacettepe event.',
+        'Placeholder: What would a fictional Hacettepe building look like?',
+    ],
+    TR: [
+        'Yer tutucu: Hacettepe hakkında hayali bir bilgi nedir?',
+        'Yer tutucu: Hayali bir Hacettepe geleneği oluşturabilir misin?',
+        'Yer tutucu: Hayali bir Hacettepe etkinliğini anlatır mısın?',
+        'Yer tutucu: Hayali bir Hacettepe binası nasıl görünürdü?',
+    ],
+}
+
+const App = () => {
     const { theme, setTheme, language, setLanguage } = useSettings()
     const [infoOpen, setInfoOpen] = useState(false)
     const [newChatOpen, setNewChatOpen] = useState(false)
-
+    const chatInputRef = useRef<{ setValueAndFocus: (value: string) => void }>(null)
     const [chatHistory, setChatHistory] = useState<Message[]>(() => {
         // Retrieve chat history from localStorage or default to []
         const savedChatHistory = localStorage.getItem('chatHistory')
@@ -71,57 +86,73 @@ const App =  () => {
     const grow = (value: number) => ({ flexGrow: value })
 
     return (
-    <TooltipProvider delayDuration={400}>
-    <div className="flex h-dvh flex-col bg-background text-foreground">
-        <Header
-            language={language}
-            setLanguage={setLanguage}
-            theme={theme}
-            setTheme={setTheme}
-            hasChat={hasChat}
-            onNewChat={() => setNewChatOpen(true)}
-            onInfoClick={() => setInfoOpen(true)}
-        />
-        <main className="flex min-h-0 flex-1 flex-col">
-            <div aria-hidden="true" style={grow(hasChat ? 0 : 1)} className="basis-0 transition-[flex-grow] duration-500 ease-out motion-reduce:transition-none" />
-            <ChatConversations chatHistory={chatHistory} language={language} feedbackUrl={config.feedbackUrl} style={grow(hasChat ? 1 : 0)} />
-            {/* Collapses by animating its grid row from 1fr to 0fr, which a height transition
-                cannot do for content of unknown height. */}
-            <div
-                aria-hidden={hasChat}
-                className={`grid transition-[grid-template-rows,opacity] duration-400 ease-out motion-reduce:transition-none ${hasChat ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
-            >
-                <div className="overflow-hidden">
-                    <div className="flex flex-col items-center gap-3 px-4 pb-6 text-center">
-                        <DeerMark className="size-10 text-primary" />
-                        <h2 className="text-2xl font-medium tracking-tight text-balance">
-                            {tr ? 'Merhaba! Bugün size nasıl yardımcı olabilirim?' : 'Hello! How can I help you today?'}
-                        </h2>
-                    </div>
-                </div>
-            </div>
-            <div className="mx-auto w-full max-w-3xl shrink-0 px-4">
-                <ChatInput
+        <TooltipProvider delayDuration={400}>
+            <div className="flex h-dvh flex-col bg-background text-foreground">
+                <Header
                     language={language}
-                    chatHistory={chatHistory}
-                    setChatHistory={setChatHistory}
-                    sessionId={sessionId}
-                    setSessionId={setSessionId}
-                    chatUrl={config.chatUrl}
+                    setLanguage={setLanguage}
+                    theme={theme}
+                    setTheme={setTheme}
+                    hasChat={hasChat}
+                    onNewChat={() => setNewChatOpen(true)}
+                    onInfoClick={() => setInfoOpen(true)}
                 />
-                <p className="px-2 pt-2 pb-3 text-center text-xs text-muted-foreground">
-                    {tr
-                        ? 'hacettepe ai hata yapabilir, önemli bilgileri resmi kaynaklardan doğrulayın'
-                        : 'hacettepe ai can make mistakes, check important details against official resources'}
-                </p>
+                <main className="flex min-h-0 flex-1 flex-col">
+                    <div aria-hidden="true" style={grow(hasChat ? 0 : 1)} className="basis-0 transition-[flex-grow] duration-500 ease-out motion-reduce:transition-none" />
+                    <ChatConversations chatHistory={chatHistory} language={language} feedbackUrl={config.feedbackUrl} style={grow(hasChat ? 1 : 0)} />
+                    {/* Collapses by animating its grid row from 1fr to 0fr, which a height transition
+                cannot do for content of unknown height. */}
+                    <div
+                        aria-hidden={hasChat}
+                        {...(hasChat ? { inert: '' } : {})}
+                        className={`grid transition-[grid-template-rows,opacity] duration-400 ease-out motion-reduce:transition-none ${hasChat ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
+                    >
+                        <div className="overflow-hidden">
+                            <div className="flex flex-col items-center gap-3 px-4 pb-6 text-center">
+                                <DeerMark className="size-10 text-primary" />
+                                <h2 className="text-2xl font-medium tracking-tight text-balance">
+                                    {tr ? 'Merhaba! Bugün size nasıl yardımcı olabilirim?' : 'Hello! How can I help you today?'}
+                                </h2>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {EXAMPLE_QUESTIONS[language].map((question) => (
+                                        <button
+                                            key={question}
+                                            type="button"
+                                            disabled={hasChat}
+                                            onClick={() => chatInputRef.current?.setValueAndFocus(question)}
+                                            className="rounded-full border px-3 py-2 text-sm transition-colors hover:bg-muted"
+                                        >
+                                            {question}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    <div className="mx-auto w-full max-w-3xl shrink-0 px-4">
+                        <ChatInput
+                            ref={chatInputRef}
+                            language={language}
+                            chatHistory={chatHistory}
+                            setChatHistory={setChatHistory}
+                            sessionId={sessionId}
+                            setSessionId={setSessionId}
+                            chatUrl={config.chatUrl}
+                        />
+                        <p className="px-2 pt-2 pb-3 text-center text-xs text-muted-foreground">
+                            {tr
+                                ? 'hacettepe ai hata yapabilir, önemli bilgileri resmi kaynaklardan doğrulayın'
+                                : 'hacettepe ai can make mistakes, check important details against official resources'}
+                        </p>
+                    </div>
+                    <div aria-hidden="true" style={grow(hasChat ? 0 : 1.4)} className="basis-0 transition-[flex-grow] duration-500 ease-out motion-reduce:transition-none" />
+                </main>
+                <InfoModal open={infoOpen} onClose={() => setInfoOpen(false)} language={language} />
+                <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} onConfirm={startNewChat} language={language} />
+                <ToastContainer />
             </div>
-            <div aria-hidden="true" style={grow(hasChat ? 0 : 1.4)} className="basis-0 transition-[flex-grow] duration-500 ease-out motion-reduce:transition-none" />
-        </main>
-        <InfoModal open={infoOpen} onClose={() => setInfoOpen(false)} language={language} />
-        <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} onConfirm={startNewChat} language={language} />
-        <ToastContainer />
-    </div>
-    </TooltipProvider>
+        </TooltipProvider>
     )
 }
 
