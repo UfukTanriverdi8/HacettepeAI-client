@@ -118,6 +118,7 @@ const App = () => {
                                         <button
                                             key={question}
                                             type="button"
+                                            disabled={hasChat}
                                             onClick={() => chatInputRef.current?.setValueAndFocus(question)}
                                             className="rounded-full border px-3 py-2 text-sm transition-colors hover:bg-muted"
                                         >
