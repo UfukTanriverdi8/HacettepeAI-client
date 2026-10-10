@@ -8,6 +8,12 @@ import type { Language, Message, StreamEvent } from '../types';
 export interface ChatInputHandle {
     setValueAndFocus: (value: string) => void
 }
+
+const ERROR_MESSAGE = {
+    EN: 'Sorry, something went wrong. Please try again.',
+    TR: 'Üzgünüm, bir şeyler ters gitti. Lütfen tekrar deneyin.',
+}
+
 interface ChatInputProps {
     chatHistory: Message[]
     setChatHistory: Dispatch<SetStateAction<Message[]>>
@@ -33,7 +39,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
                         input.setSelectionRange(value.length, value.length)
                     }
                 })
-            },
+            }
         }))
 
         const sendPrompt = async (e: FormEvent<HTMLFormElement>) => {
@@ -46,19 +52,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             setLoading(true)
 
             if (chatHistory.length >= 30) {
-                const maxLimitEN = "This chat has reached its message limit. Start a new chat to keep asking."
-                const maxLimitTR = "Bu sohbet mesaj sınırına ulaştı. Sormaya devam etmek için yeni bir sohbet başlatın."
-                toast.info(language === 'EN' ? maxLimitEN : maxLimitTR, { position: 'top-center', className: 'custom-toast' })
+                const maxLimitEN = 'This chat has reached its message limit. Start a new chat to keep asking.'
+                const maxLimitTR = 'Bu sohbet mesaj sınırına ulaştı. Sormaya devam etmek için yeni bir sohbet başlatın.'
+                toast.info(language === 'EN' ? maxLimitEN : maxLimitTR, {
+                    position: 'top-center',
+                    className: 'custom-toast'
+                })
                 setInputValue(currentQuestion)
                 setLoading(false)
                 return
             }
 
-            // Add the human message
-            setChatHistory(prevHistory => [...prevHistory, { sender: 'Human', message: currentQuestion }])
+            setChatHistory(prevHistory => [
+                ...prevHistory,
+                { sender: 'Human', message: currentQuestion }
+            ])
 
-            // Add a placeholder for the AI response
-            const aiMessageId = Date.now();
+            const aiMessageId = Date.now()
             setChatHistory(prevHistory => [
                 ...prevHistory,
                 {
@@ -69,11 +79,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
                 }
             ])
 
-            // Every stream event is a partial update to that one placeholder, so this runs
-            // several times per question rather than once at the end.
-            const patchAiMessage = (patch: Partial<Message>) => setChatHistory(prevHistory => prevHistory.map(message =>
-                message.id === aiMessageId ? { ...message, ...patch } : message
-            ))
+            const patchAiMessage = (patch: Partial<Message>) =>
+                setChatHistory(prevHistory => prevHistory.map(message =>
+                    message.id === aiMessageId ? { ...message, ...patch } : message
+                ))
 
             let activeSessionId = sessionId
             let answer = ''
@@ -83,48 +92,36 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             const handleEvent = (event: StreamEvent) => {
                 switch (event.type) {
                     case 'session':
-                        // Sent before any Bedrock work, so the id survives a stream that dies
-                        // halfway and the next question continues the same conversation.
                         activeSessionId = event.session_id
                         setSessionId(event.session_id)
                         localStorage.setItem('session_id', event.session_id)
                         break
                     case 'status':
-                        // Kept as well as rendered, so a discard can put the bubble back into the
-                        // state it was in before the retracted text overwrote it.
                         lastStatus = event.message
                         patchAiMessage({ status: lastStatus })
                         break
                     case 'token':
-                        // Appended, not assigned: one event per text delta, a few hundred per
-                        // answer. ChatMessage smooths the arrival rate, so the lumpiness the
-                        // network imposes on these does not reach the screen.
                         answer += event.text
                         patchAiMessage({ message: answer, isPlaceholder: false, status: null })
                         break
                     case 'discard':
-                        // Everything streamed so far was the model narrating a tool call it was
-                        // about to make, not answer text (app/streaming.py's discard()). Dropping
-                        // it here is what keeps 'let me check the live page' from being glued to
-                        // the front of the real answer. Back to isPlaceholder so the status line
-                        // returns, carrying whatever the server last reported until the tool's own
-                        // status arrives a moment later.
                         answer = ''
                         patchAiMessage({ message: '', isPlaceholder: true, status: lastStatus })
                         break
                     case 'sources':
-                        // Offsets index `answer` as it stands now: the backend sends only the final
-                        // turn's citations, and a discard already cleared any earlier text.
                         patchAiMessage({ sources: event.sources, citations: event.citations })
                         break
                     case 'done':
-                        // timestamp is the DynamoDB sort key this answer is stored under, and is
-                        // absent when the write failed — ChatMessage gates the feedback button on it.
                         patchAiMessage({ timestamp: event.timestamp, session_id: activeSessionId })
                         break
                     case 'error':
                         errorShown = true
-                        patchAiMessage({ message: event.message, isPlaceholder: false, status: null })
+                        console.error(event.message)
+                        patchAiMessage({
+                            message: ERROR_MESSAGE[language],
+                            isPlaceholder: false,
+                            status: null
+                        })
                         break
                 }
             }
@@ -147,18 +144,14 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
                 const decoder = new TextDecoder()
                 let buffer = ''
 
-                for (; ;) {
+                for (;;) {
                     const { done, value } = await reader.read()
                     if (done) break
-                    // stream: true holds back an incomplete UTF-8 sequence. Turkish answers are
-                    // full of multi-byte characters, so a chunk splitting one is routine.
+
                     buffer += decoder.decode(value, { stream: true })
                     const lines = buffer.split('\n')
-                    // Chunk boundaries land wherever TCP puts them, not on newlines, so the last
-                    // element is usually a partial line. Carry it into the next read instead of
-                    // parsing it — parsing throws, dropping it loses tokens.
-                    // split() always returns at least one element, so pop() never yields undefined.
                     buffer = lines.pop() ?? ''
+
                     for (const line of lines) {
                         if (line.trim()) handleEvent(JSON.parse(line) as StreamEvent)
                     }
@@ -166,26 +159,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
 
                 buffer += decoder.decode()
                 if (buffer.trim()) handleEvent(JSON.parse(buffer) as StreamEvent)
-
             } catch (error) {
-                console.error('Error:', error);
-                // Without this the placeholder stays on "Thinking...🤔" forever and gets persisted
-                // to localStorage in that state.
+                console.error('Error:', error)
                 if (!errorShown) {
                     patchAiMessage({
-                        message: language === 'EN'
-                            ? 'Sorry, something went wrong. Please try again.'
-                            : 'Üzgünüm, bir şeyler ters gitti. Lütfen tekrar deneyin.',
+                        message: ERROR_MESSAGE[language],
                         isPlaceholder: false,
                         status: null
                     })
                 }
             } finally {
-                setLoading(false);
+                setLoading(false)
             }
         }
 
-        const label = language === 'EN' ? 'What would you like to know about Hacettepe?' : 'Hacettepe hakkında ne öğrenmek istersiniz?'
+        const label = language === 'EN'
+            ? 'What would you like to know about Hacettepe?'
+            : 'Hacettepe hakkında ne öğrenmek istersiniz?'
 
         return (
             <form
@@ -216,7 +206,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         )
     },
 )
-
 
 ChatInput.displayName = 'ChatInput'
 
